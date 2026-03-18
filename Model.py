@@ -5,6 +5,7 @@ from sklearn.ensemble import RandomForestClassifier
 from colorama import Fore
 import matplotlib.pyplot as plt
 from sklearn.model_selection import GridSearchCV
+from sklearn.calibration import CalibratedClassifierCV
 
 data = pd.read_csv("prepped_data.csv")
 matchups = pd.read_csv("2026_prepped_Matchups.csv")
@@ -57,11 +58,11 @@ param_grid = {
     'eval_metric':["logloss"]
 }
 
-grid_search = GridSearchCV(estimator=m1, param_grid=param_grid, scoring='d2_log_loss_score', cv=5)
-grid_search.fit(Xtrain_selected, ytrain)
-best_params = grid_search.best_params_
+# grid_search = GridSearchCV(estimator=m1, param_grid=param_grid, scoring='neg_log_loss', cv=5)
+# grid_search.fit(Xtrain_selected, ytrain)
+# best_params = grid_search.best_params_
 
-#best_params = {'eval_metric': 'logloss', 'gamma': 0.1, 'learning_rate': 0.1, 'max_depth': 5, 'min_child_weight': 3, 'objective': 'binary:logistic', 'subsample': 1.0}
+best_params = {'eval_metric': 'logloss', 'gamma': 0.1, 'learning_rate': 0.1, 'max_depth': 5, 'min_child_weight': 3, 'objective': 'binary:logistic', 'subsample': 0.9}
 
 print("Best Parameters: ", best_params)
 
@@ -74,12 +75,21 @@ output = pd.DataFrame(predictions2[:,1], columns = ['Predictions'])
 output['Actual'] = ytest.astype(int).reset_index(drop=True)
 output["Score"] = (output["Actual"] - output["Predictions"])**2
 print(Fore.BLUE + "********** OPTIMIZED PREDITCTION SCORE: " + Fore.GREEN + str(output["Score"].mean()) + Fore.BLUE + " ***************" + Fore.WHITE)
-print(Fore.BLUE + "********** BEST PREDITCTION SCORE: " + Fore.RED + "0.1708748094011202" + Fore.BLUE + " ***************" + Fore.WHITE)
+
+calibrated_model = CalibratedClassifierCV(m2, method='isotonic', cv=5)
+calibrated_model.fit(Xtrain_selected, ytrain)
+calibrated_predictions = calibrated_model.predict_proba(Xtest_selected)
+
+output = pd.DataFrame(calibrated_predictions[:,1], columns = ['Predictions'])
+output['Actual'] = ytest.astype(int).reset_index(drop=True)
+output["Score"] = (output["Actual"] - output["Predictions"])**2
+print(Fore.BLUE + "********** CALIBRATED PREDITCTION SCORE: " + Fore.MAGENTA + str(output["Score"].mean()) + Fore.BLUE + " ***************" + Fore.WHITE)
+print(Fore.BLUE + "********** BEST PREDITCTION SCORE: " + Fore.RED + "0.17057025024611389" + Fore.BLUE + " ***************" + Fore.WHITE)
 
 #Updated Predictions
 test = test.copy()
-test['Pred'] = predictions2[:,1]
-test['rounded_preds'] = np.round(predictions2[:,1])
+test['Pred'] = calibrated_predictions[:,1]
+test['rounded_preds'] = np.round(calibrated_predictions[:,1])
 test['Actual'] = (test['T1_Score'] > test['T2_Score']).astype(int)
 test['Correct'] = test['rounded_preds'] == test['Actual']
 summary = test[['Season', 'DayNum', 'T1_TeamID', 'T1_Score', 'T2_TeamID', 'T2_Score', 'Pred', 'rounded_preds', 'Actual', 'Correct']]
@@ -91,7 +101,7 @@ summary.to_csv('Predictions.csv', index=False)
 
 #Make predictions for this year
 finalPredictFeatures = matchups[top_features]
-finalPredictions = m2.predict_proba(finalPredictFeatures)
+finalPredictions = calibrated_model.predict_proba(finalPredictFeatures)
 
 finalPredictionsTable = matchups.copy()
 matchups['preds'] = finalPredictions[:,1]
