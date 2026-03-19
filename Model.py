@@ -11,8 +11,8 @@ data = pd.read_csv("prepped_data.csv")
 matchups = pd.read_csv("2026_prepped_Matchups.csv")
 
 features = ['T1_OffRating', 'T2_OffRating', 'T1_DefRating', 'T2_DefRating', 'Seed_Diff', 'offRatingDiff',
-            'defRatingDiff', 'ftRateDiff', 'wabDiff', 'talentDiff', 'sosDiff', 'threepgDiff', 'tempoDiff', 'effHeightDiff',
-             'defRating_x_tempo', 'talent_x_sos', 'T1_var', 'T2_var']
+            'defRatingDiff', 'wabDiff', 'talentDiff', 'sosDiff', 'effHeightDiff',
+            'varDiff', 'T1_var', 'T2_var', 'recentPomDiff']
 
 train = data[data['Season'] < 2020]
 test = data[data['Season'] > 2020]
@@ -27,13 +27,14 @@ rf = RandomForestClassifier(n_estimators=200, random_state=42)
 rf.fit(Xtrain, ytrain)
 
 feature_importance = pd.Series(rf.feature_importances_, index = Xtrain.columns)
+
 n = len(features)
+
 top_features = feature_importance.nlargest(n).index #Selects the n top features
 print(top_features)
 
-#Filter for only selected features
-Xtrain_selected = Xtrain[top_features]
-Xtest_selected = Xtest[top_features]
+Xtrain_selected = train[top_features]
+Xtest_selected = test[top_features]
 
 #Train the XGBoost model
 m1 = XGBClassifier()
@@ -49,9 +50,9 @@ print(Fore.BLUE + "********** PREDITCTION SCORE: " + Fore.YELLOW + str(output["S
 
 #Optimized parameters to avoid overfitting and improve the model
 param_grid = {
-    'max_depth': [5, 7, 10],
-    'min_child_weight': [1, 3, 5],
-    'learning_rate': [0.1, 0.01],
+    'max_depth': [3, 5, 7],
+    'min_child_weight': [2, 3, 4],
+    'learning_rate': [0.15, 0.1, 0.01],
     'subsample': [0.7, 0.9, 1.0],
     'gamma': [0.1, 0.2, 0.5],
     'objective':["binary:logistic"],
@@ -62,20 +63,24 @@ param_grid = {
 # grid_search.fit(Xtrain_selected, ytrain)
 # best_params = grid_search.best_params_
 
-best_params = {'eval_metric': 'logloss', 'gamma': 0.1, 'learning_rate': 0.1, 'max_depth': 5, 'min_child_weight': 3, 'objective': 'binary:logistic', 'subsample': 0.9}
+best_params = {'eval_metric': 'logloss', 'gamma': 0.2, 'learning_rate': 0.1, 'max_depth': 3, 'min_child_weight': 2, 'objective': 'binary:logistic', 'subsample': 0.9}
 
 print("Best Parameters: ", best_params)
 
+#Create a new model with the optimized parameters from grid search
 m2 = XGBClassifier(**best_params)
 
 m2.fit(Xtrain_selected, ytrain)
 predictions2 = m2.predict_proba(Xtest_selected)
+
+
 
 output = pd.DataFrame(predictions2[:,1], columns = ['Predictions'])
 output['Actual'] = ytest.astype(int).reset_index(drop=True)
 output["Score"] = (output["Actual"] - output["Predictions"])**2
 print(Fore.BLUE + "********** OPTIMIZED PREDITCTION SCORE: " + Fore.GREEN + str(output["Score"].mean()) + Fore.BLUE + " ***************" + Fore.WHITE)
 
+#Calibrate the model
 calibrated_model = CalibratedClassifierCV(m2, method='isotonic', cv=5)
 calibrated_model.fit(Xtrain_selected, ytrain)
 calibrated_predictions = calibrated_model.predict_proba(Xtest_selected)
@@ -84,7 +89,7 @@ output = pd.DataFrame(calibrated_predictions[:,1], columns = ['Predictions'])
 output['Actual'] = ytest.astype(int).reset_index(drop=True)
 output["Score"] = (output["Actual"] - output["Predictions"])**2
 print(Fore.BLUE + "********** CALIBRATED PREDITCTION SCORE: " + Fore.MAGENTA + str(output["Score"].mean()) + Fore.BLUE + " ***************" + Fore.WHITE)
-print(Fore.BLUE + "********** BEST PREDITCTION SCORE: " + Fore.RED + "0.17057025024611389" + Fore.BLUE + " ***************" + Fore.WHITE)
+print(Fore.BLUE + "********** BEST PREDITCTION SCORE: " + Fore.RED + "0.1675280804259858" + Fore.BLUE + " ***************" + Fore.WHITE)
 
 #Updated Predictions
 test = test.copy()
@@ -99,20 +104,22 @@ summary.to_csv('Predictions.csv', index=False)
 
 
 
-#Make predictions for this year
+#Make predictions for this year using our calibrated model
 finalPredictFeatures = matchups[top_features]
 finalPredictions = calibrated_model.predict_proba(finalPredictFeatures)
 
 finalPredictionsTable = matchups.copy()
 matchups['preds'] = finalPredictions[:,1]
 matchups['rounded_preds'] = np.round(finalPredictions[:,1])
-finalPredSummary = matchups[['HigherSeed', 'HigherSeedNum', 'LowerSeed', 'LowerSeedNum', 'preds']]
+finalPredSummary = matchups[['HigherSeed', 'HigherSeedID', 'HigherSeedNum', 'LowerSeed', 'LowerSeedID', 'LowerSeedNum', 'preds']]
+finalPredSummary.rename(columns={'preds':'Predictions'}, inplace=True)
 
 finalPredSummary.to_csv("final_predictions.csv", index=False)
 
 #See what upsets we are predicting to take place
 finalPredUpsets = matchups.loc[matchups['preds'] < 0.5]
-finalPredUpsets = finalPredUpsets[['HigherSeed', 'HigherSeedNum', 'LowerSeed', 'LowerSeedNum', 'preds']]
+finalPredUpsets = finalPredUpsets[['HigherSeed', 'HigherSeedID', 'HigherSeedNum', 'LowerSeed', 'LowerSeedID', 'LowerSeedNum', 'preds']]
+finalPredUpsets.rename(columns={'preds':'Predictions'}, inplace=True)
 finalPredUpsets.to_csv("final_prediction_upsets.csv", index=False)
 
 plt.hist(matchups['preds'], bins=20)

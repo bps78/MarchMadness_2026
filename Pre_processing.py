@@ -183,6 +183,17 @@ kenpomOff = pd.read_csv("INT _ KenPom _ Offense.csv")
 kenpomOff['TeamName'] = kenpomOff['TeamName'].apply(map_teams)
 kenpomOff.to_csv('Kenpom_off_renamed.csv', index=False)
 
+ordinals = pd.read_csv("MMasseyOrdinals.csv")
+teams = pd.read_csv("MTeams.csv")
+ordinals = ordinals.loc[ordinals['SystemName'] == 'POM']
+ordinals = ordinals.merge(
+    teams[['TeamID', 'TeamName']],
+    on='TeamID',
+    how='left'
+)
+ordinals['TeamName'] = ordinals['TeamName'].apply(map_teams)
+ordinals.to_csv('MasseyOrdinals_renamed.csv', index=False)
+
 #Mapping from the barttorvik dataset naming conventions to the MTeams csv naming conventions
 barttorvikToMTeams = team_pairings = {
     'Boise St.': 'Boise St',

@@ -13,6 +13,8 @@ season = pd.read_csv("MRegularSeasonDetailedResults.csv")
 tourney = pd.read_csv("MNCAATourneyCompactResults.csv")
 seeds = pd.read_csv("MNCAATourneySeeds.csv")
 
+ordinals = pd.read_csv("MasseyOrdinals_renamed.csv")
+
 
 my_data = pd.DataFrame()
 
@@ -55,13 +57,17 @@ for y in range(2008, 2027):
                 effHeight = bart.loc[(bart['TEAM'] == x) & (bart['YEAR'] == year)]['EFF HGT'].values[0]
                 threesShare = bart.loc[(bart['TEAM'] == x) & (bart['YEAR'] == year)]['3PTR'].values[0]
 
+                recentPomDelta = ordinals.loc[(ordinals['TeamName'] == x) & (ordinals['Season'] == year)]['OrdinalRank'].values[-1] - \
+                    ordinals.loc[(ordinals['TeamName'] == x) & (ordinals['Season'] == year) & (ordinals['RankingDayNum'] < 101)]['OrdinalRank'].values[-1]
+
+
 
                 threesPG, ftpg, pdiffpg, variance = getAggregateStats(z, year)
 
                 new_data = pd.DataFrame({'Year': y, 'ID': z, 'Team': x, 'offRating': offRating, 'defRating': defRating,
                                          'tempo': temp, 'fgEff': fgEff, 'ftRate': ftRate, 'wab': wab, 'talent': talent,
                                          'sos': sos, 'threepg': threesPG, 'ftpg': ftpg, 'pDiffpg': pdiffpg, 'effHeight': effHeight,
-                                         'variance': variance, 'threesShare': threesShare}, index = [x])
+                                         'variance': variance, 'threesShare': threesShare, 'recentPomDelta': recentPomDelta}, index = [x])
 
                 if(not new_data.empty):
                     my_data = pd.concat([my_data, new_data])
@@ -122,6 +128,9 @@ for index, row in tourney.iterrows():
 
         tourney.loc[index, 'WthreesShare'] = my_data.loc[(my_data['Year'] == year) & (my_data['ID'] == wID)]['threesShare'].values[0]
         tourney.loc[index, 'LthreesShare'] = my_data.loc[(my_data['Year'] == year) & (my_data['ID'] == lID)]['threesShare'].values[0]
+
+        tourney.loc[index, 'WrecentPom'] = my_data.loc[(my_data['Year'] == year) & (my_data['ID'] == wID)]['recentPomDelta'].values[0]
+        tourney.loc[index, 'LrecentPom'] = my_data.loc[(my_data['Year'] == year) & (my_data['ID'] == lID)]['recentPomDelta'].values[0]
 
 
 
@@ -206,6 +215,9 @@ for index, row in submission.iterrows():
     submission.loc[index, 'T1_threesShare'] = my_data.loc[(my_data['Year'] == year) & (my_data['Team'].apply(map_teams) == t1)]['threesShare'].values[0]
     submission.loc[index, 'T2_threesShare'] = my_data.loc[(my_data['Year'] == year) & (my_data['Team'].apply(map_teams) == t2)]['threesShare'].values[0]
 
+    submission.loc[index, 'T1_recentPom'] = my_data.loc[(my_data['Year'] == year) & (my_data['Team'].apply(map_teams) == t1)]['recentPomDelta'].values[0]
+    submission.loc[index, 'T2_recentPom'] = my_data.loc[(my_data['Year'] == year) & (my_data['Team'].apply(map_teams) == t2)]['recentPomDelta'].values[0]
+
 
 
 #Replaces the W and L with T1 and T2 as well as creates 2 copies of every game so that the team listed first does not always win every time
@@ -213,7 +225,7 @@ def prepare_data(df):
     dfswap = df[['Season', 'DayNum', 'LTeam', 'LTeamID', 'LScore', 'WTeam', 'WTeamID', 'WScore', 'WLoc', 'NumOT', 'WOffRating',
                  'LOffRating', 'WDefRating', 'LDefRating', 'Wtempo', 'Ltempo', 'WfgEff', 'LfgEff', 'WftRate', 'LftRate',
                  'Wwab', 'Lwab', 'Wtalent', 'Ltalent', 'Wsos', 'Lsos', 'WThreepg', 'LThreepg', 'WFTPG', 'LFTPG', 'WPDiffPG',
-                 'LPDiffPG', 'WeffHeight', 'LeffHeight', 'Wvar', 'Lvar', 'WthreesShare', 'LthreesShare']].copy()
+                 'LPDiffPG', 'WeffHeight', 'LeffHeight', 'Wvar', 'Lvar', 'WthreesShare', 'LthreesShare', 'WrecentPom', 'LrecentPom']].copy()
   
     df.columns = [x.replace('W','T1_').replace('L','T2_') for x in list(df.columns)]
     dfswap.columns = [x.replace('L','T1_').replace('W','T2_') for x in list(dfswap.columns)]
@@ -242,7 +254,8 @@ diff_cols = [
     ('tempo', 'T1_tempo', 'T2_tempo'),
     ('effHeight', 'T1_effHeight', 'T2_effHeight'),
     ('var', 'T1_var', 'T2_var'),
-    ('threesShare', 'T1_threesShare', 'T2_threesShare')
+    ('threesShare', 'T1_threesShare', 'T2_threesShare'),
+    ('recentPom', 'T1_recentPom', 'T2_recentPom')
 ]
 
 for col, t1, t2 in diff_cols:
@@ -275,6 +288,10 @@ prepped_data['Seed_Diff'] = prepped_data['T1_seed'] - prepped_data['T2_seed']
 
 submission['T1_seed'] = submission['HigherSeedNum']
 submission['T2_seed'] = submission['LowerSeedNum']
+
+#Add thresholds
+prepped_data['historic_upset'] = (prepped_data['Seed_Diff'] == 7).astype(int)
+submission['historic_upset'] = (submission['Seed_Diff'] == 7).astype(int)
 
 
 #Save our data to be used by the model
