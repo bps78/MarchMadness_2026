@@ -4,6 +4,13 @@
 
 <br>
 
+Results:
+- 🏆 Model-generated bracket finished 1st of 20 in UW-Madison's Sports Analytics Club bracket group on ESPN Tournament Challenge
+- 🥈 Finished 2nd of 23 in UW-Madison's Sports Analytics Club competition based on briar score
+- ⭐️ Correctly predicted Michigan as the champion as well as 3 of the final four teams
+  
+<br>
+
 Data Sources:
 - https://www.kaggle.com/datasets/nishaanamin/march-madness-data
 - https://www.kaggle.com/competitions/march-machine-learning-mania-2026
