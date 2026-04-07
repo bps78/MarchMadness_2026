@@ -22,4 +22,4 @@ AI Uses (ChatGPT):
 
 <br>
 
-<img width="444" height="484" alt="Screenshot 2026-03-19 at 12 31 02 AM" src="https://github.com/user-attachments/assets/2af507ee-f80d-4f87-831b-c9e46efda585" />
+<img height="600" alt="Screenshot 2026-03-19 at 12 31 02 AM" src="https://github.com/user-attachments/assets/4b3dd4d8-e9fa-4e02-85e3-f7620fd017e5" />
